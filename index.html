@@ -314,8 +314,17 @@ function recalc(){
     if(spouse){
       const it_sp=spouseDeduction_IT(youAGI, spAGI, spAge), rt_sp=spouseDeduction_RT(youAGI, spAGI, spAge);
       const it_spc=spouseSpecial_IT(youAGI, spAGI), rt_spc=spouseSpecial_RT(youAGI, spAGI);
+      const anySpouse = (it_sp||rt_sp||it_spc||rt_spc);
       if(it_sp||rt_sp) push('配偶者控除', it_sp, rt_sp, `配偶者AGI：${yen(spAGI)}`);
-      if(it_spc||rt_spc) push('配偶者特別控除', it_spc, rt_spc, '配偶者AGI帯に該当');
+      if(it_spc||rt_spc) push('配偶者特別控除', it_spc, rt_spc, `配偶者AGI：${yen(spAGI)}`);
+      if(!anySpouse){
+        let reason = '';
+        if(youAGI>10000000) reason='納税者の合計所得が1,000万円超のため対象外';
+        else if(spAGI>1330000) reason='配偶者の合計所得が133万円超のため対象外';
+        else if(!Number.isFinite(spAGI)) reason='配偶者の合計所得未入力';
+        else reason='要件未充足（年齢や区分を確認）';
+        push('配偶者控除等（該当なし）', 0, 0, reason);
+      }
       const it_spdis=(spDis!=='none')? (spDis==='tokubetsu'?400000:270000) : 0;
       const rt_spdis=(spDis!=='none')? (spDis==='tokubetsu'?300000:260000) : 0;
       if(it_spdis||rt_spdis) push('障害者控除（配偶者）', it_spdis, rt_spdis, '同一生計配偶者');
