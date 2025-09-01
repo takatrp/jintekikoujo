@@ -145,10 +145,10 @@
   </main>
 
   <footer class="no-print">
-    Copyright (c) 2025 税理士法人松本会計事務所 All Rights Reserved. / <b>r6</b>
+    <span id="creditText">Copyright (c) 2025 税理士法人松本会計事務所 All Rights Reserved. / r6</span>
   </footer>
 
-<script>
+<script id="app-script">
 // ====== 共通フォーマット ======
 const fmt = (n)=> (n===null||n===undefined||isNaN(n)? '0' : Number(n).toLocaleString('ja-JP'));
 const yen = (n)=> '¥'+fmt(n);
@@ -330,9 +330,34 @@ function exportPDF(){ const s=$('#sheet'); if(!s){alert('転記シートが見�
 function resetAll(){ if(!confirm('入力内容をすべて初期化します。よろしいですか？')) return; $('#employer').value=''; $('#youName').value=''; $('#youKana').value=''; $('#youAddr').value=''; $('#youDOB').value=''; $('#youSalary').value=''; $('#youOther').value='0'; $('#youDis').value='none'; $('#hasSpouse').value='no'; members=[]; renderMembers(); attachComma(); recalc(); }
 function escapeHtml(s){ if(!s&&s!==0) return ''; return String(s).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
 
+// ====== バージョンカウンタ（コード更新ごとに自動加算） ======
+async function updateCreditVersion(){
+  try{
+    const el = document.getElementById('creditText');
+    if(!el) return;
+    const scriptEl = document.getElementById('app-script');
+    const src = scriptEl ? scriptEl.textContent : document.documentElement.outerHTML; // フォールバック
+    const enc = new TextEncoder();
+    const hashBuf = await crypto.subtle.digest('SHA-256', enc.encode(src));
+    const hex = Array.from(new Uint8Array(hashBuf)).slice(0,8).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const KEY_HASH='jk_r6_hash', KEY_REV='jk_r6_rev';
+    const oldHash = localStorage.getItem(KEY_HASH);
+    let rev = Number(localStorage.getItem(KEY_REV)||'0');
+    if(oldHash !== hex){
+      rev = rev + 1;
+      localStorage.setItem(KEY_HASH, hex);
+      localStorage.setItem(KEY_REV, String(rev));
+    }
+    const d=new Date(); const pad=n=>String(n).padStart(2,'0');
+    const ts=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    el.textContent = `Copyright (c) 2025 税理士法人松本会計事務所 All Rights Reserved. / r6 rev.${rev} [${hex}] ${ts}`;
+  }catch(e){ /* 失敗時は既定文言のまま */ }
+}
+
 // 初期化
 attachComma();
 recalc();
+updateCreditVersion();
 </script>
 </body>
 </html>
