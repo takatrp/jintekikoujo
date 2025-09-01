@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>人的控除アプリ r6（完全版）</title>
+<title>人的控除アプリ r6（完全版・安定修正版）</title>
 <style>
   :root{
     --ink:#27364B;        /* 文字色（濃い藍） */
@@ -16,7 +16,7 @@
   header{position:sticky;top:0;background:#fff;z-index:5;border-bottom:1px solid var(--border)}
   header .bar{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 14px}
   header h1{font-size:16px;margin:0}
-  main{display:grid;grid-template-columns:minmax(520px,640px) 1fr;gap:14px;padding:14px}
+  main{display:grid;grid-template-columns:minmax(560px,680px) 1fr;gap:14px;padding:14px}
   .panel{border:1px solid var(--border);border-radius:12px;background:#fff}
   .panel h2{font-size:15px;margin:0;padding:12px 14px;border-bottom:1px solid var(--border)}
   .panel .content{padding:12px 14px}
@@ -34,11 +34,13 @@
   .member .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
   .hint{font-size:12px;color:var(--muted)}
 
-  .results{display:grid;grid-template-columns:repeat(2, minmax(300px,1fr));gap:12px}
+  .results{display:grid;grid-template-columns:repeat(2, minmax(320px,1fr));gap:12px}
   .card{border:1px solid var(--border);border-radius:12px;padding:12px}
   .card h3{margin:0 0 6px 0;font-size:14px}
   .table{width:100%;border-collapse:collapse}
   .table th,.table td{border:1px solid var(--border);padding:6px 8px;text-align:left}
+  .right{text-align:right}
+  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
 
   /* 転記シート（A4横） */
   .sheetWrap{display:none;margin-top:12px}
@@ -49,7 +51,6 @@
   .box{border:1px solid #000;padding:8px}
   .box h4{margin:0 0 6px 0;font-size:13px}
   .kv{display:grid;grid-template-columns:240px 1fr;gap:6px}
-  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
   .subtle{color:#444}
 
   .print-bar{display:flex;gap:8px;align-items:center}
@@ -61,7 +62,7 @@
 <body>
   <header>
     <div class="bar">
-      <h1>人的控除アプリ r6（完全版）</h1>
+      <h1>人的控除アプリ r6（完全版・安定修正版）</h1>
       <div class="print-bar no-print">
         <button onclick="recalc()">再計算</button>
         <button id="toggleSheetBtn" onclick="toggleSheet()">転記シートを表示</button>
@@ -102,6 +103,15 @@
             </select>
           </div>
         </div>
+        <div class="card" style="margin-top:10px">
+          <h3>本人の計算サマリ</h3>
+          <div class="row">
+            <div>給与所得控除：<b class="mono" id="youKoujo">—</b></div>
+            <div>給与所得金額：<b class="mono" id="youShotoku">—</b></div>
+          </div>
+          <div>合計所得金額（見積）：<b class="mono" id="youAGI">—</b></div>
+          <div>基礎控除（所得税/住民税）：<b class="mono" id="youBasicIT">—</b> / <b class="mono" id="youBasicRT">—</b>（区分Ⅰ：<span id="youKubun">—</span>）</div>
+        </div>
       </div>
     </section>
 
@@ -127,11 +137,15 @@
       </div>
     </section>
 
-    <!-- 右：計算と転記シート -->
+    <!-- 右：計算と一覧 -->
     <section class="panel" style="grid-column:1 / -1">
-      <h2>③ 計算結果</h2>
+      <h2>③ 控除額テーブル</h2>
       <div class="content">
-        <div class="results" id="results"></div>
+        <table class="table" id="resultTbl">
+          <thead><tr><th>区分</th><th class="right">所得税</th><th class="right">住民税</th><th>メモ</th></tr></thead>
+          <tbody id="tbody"></tbody>
+          <tfoot><tr><td>合計</td><td id="sum_itax" class="right mono">—</td><td id="sum_rtax" class="right mono">—</td><td></td></tr></tfoot>
+        </table>
       </div>
     </section>
 
@@ -266,61 +280,81 @@ function tokutei_RT(agi){ if(agi<=580000||agi>1230000) return 0; if(agi<=950000)
 
 // ====== 集計 ======
 function recalc(){
-  const you = { name:$('#youName').value.trim(), kana:$('#youKana').value.trim(), addr:$('#youAddr').value.trim(), dob:$('#youDOB').value, salary:parseNum($('#youSalary').value), other:parseNum($('#youOther').value), disabled:$('#youDis').value };
-  const employer = $('#employer').value.trim();
+  try{
+    const you = { name:$('#youName').value.trim(), kana:$('#youKana').value.trim(), addr:$('#youAddr').value.trim(), dob:$('#youDOB').value, salary:parseNum($('#youSalary').value), other:parseNum($('#youOther').value), disabled:$('#youDis').value };
+    const employer = $('#employer').value.trim();
 
-  const youSO = salaryToIncome(you.salary); $('#youSalaryAfter').textContent = yen(youSO);
-  const youAGI = youSO + Number(you.other||0);
-  const youBasicIT = basic_IT(youAGI); const youBasicRT = basic_RT(youAGI);
-  const kubun1 = kubunI(youAGI);
+    // 本人表示
+    const youKJ = kyuyoShotokuKojo(you.salary);
+    const youSO = salaryToIncome(you.salary);
+    const youAGI = youSO + Number(you.other||0);
+    $('#youKoujo').textContent = yen(youKJ);
+    $('#youShotoku').textContent = yen(youSO);
+    $('#youAGI').textContent = yen(youAGI);
+    $('#youSalaryAfter').textContent = yen(youSO);
+    const youBasicIT = basic_IT(youAGI), youBasicRT = basic_RT(youAGI);
+    $('#youBasicIT').textContent = yen(youBasicIT);
+    $('#youBasicRT').textContent = yen(youBasicRT);
+    $('#youKubun').textContent = kubunI(youAGI);
 
-  // メンバー（給与所得金額の横表示）
-  members.forEach(m=>{ const so=salaryToIncome(m.salary); const elSo=document.getElementById(`so_${m.id}`); if(elSo) elSo.textContent = yen(so); });
+    // 家族の表示（給与所得金額）
+    members.forEach(m=>{
+      const so=salaryToIncome(m.salary);
+      const soEl=document.getElementById(`so_${m.id}`);
+      if(soEl) soEl.textContent = yen(so);
+    });
 
-  // 結果カード
-  const res = $('#results'); res.innerHTML='';
-  const c1=document.createElement('div'); c1.className='card'; c1.innerHTML=`<h3>本人の合計所得見積：<b class="mono">${yen(youAGI)}</b></h3><div class="muted">基礎控除（所得税/住民税）：<b>${yen(youBasicIT)}</b> / <b>${yen(youBasicRT)}</b>（区分Ⅰ：${kubun1}）</div>`;
+    // テーブル集計
+    let rows=[]; let itSum=0, rtSum=0; const push=(name,it,rt,memo='')=>{ itSum+=it; rtSum+=rt; rows.push({name,it,rt,memo}); };
+    push('基礎控除', youBasicIT, youBasicRT, `区分Ⅰ：${kubunI(youAGI)}`);
 
-  // 配偶者
-  const spouse = members.find(m=>m.kind==='配偶者');
-  let spAGI=null, spAge=0, spDis='none';
-  if(spouse){ spAGI=agiOf(spouse); spAge=ageAt(spouse.dob)||0; spDis=spouse.disabled; }
-  const it_sp = spouse?spouseDeduction_IT(youAGI, spAGI, spAge):0;
-  const rt_sp = spouse?spouseDeduction_RT(youAGI, spAGI, spAge):0;
-  const it_spc= spouse?spouseSpecial_IT(youAGI, spAGI):0;
-  const rt_spc= spouse?spouseSpecial_RT(youAGI, spAGI):0;
-  const c2=document.createElement('div'); c2.className='card'; c2.innerHTML=`<h3>配偶者控除等</h3><div>配偶者AGI：<b class="mono">${spAGI!==null?yen(spAGI):'—'}</b>／控除（所得税/住民税）：<b>${yen(it_sp||it_spc)}</b> / <b>${yen(rt_sp||rt_spc)}</b></div>`;
+    const spouse = members.find(m=>m.kind==='配偶者');
+    let spAGI=null, spAge=0, spDis='none';
+    if(spouse){ spAGI=agiOf(spouse); spAge=ageAt(spouse.dob)||0; spDis=spouse.disabled; }
+    if(spouse){
+      const it_sp=spouseDeduction_IT(youAGI, spAGI, spAge), rt_sp=spouseDeduction_RT(youAGI, spAGI, spAge);
+      const it_spc=spouseSpecial_IT(youAGI, spAGI), rt_spc=spouseSpecial_RT(youAGI, spAGI);
+      if(it_sp||rt_sp) push('配偶者控除', it_sp, rt_sp, `配偶者AGI：${yen(spAGI)}`);
+      if(it_spc||rt_spc) push('配偶者特別控除', it_spc, rt_spc, '配偶者AGI帯に該当');
+      const it_spdis=(spDis!=='none')? (spDis==='tokubetsu'?400000:270000) : 0;
+      const rt_spdis=(spDis!=='none')? (spDis==='tokubetsu'?300000:260000) : 0;
+      if(it_spdis||rt_spdis) push('障害者控除（配偶者）', it_spdis, rt_spdis, '同一生計配偶者');
+    }
 
-  // 扶養・特定親族特別
-  const deps = members.filter(m=>m.kind!=='配偶者');
-  const fRows=[]; const tRows=[];
-  deps.forEach(m=>{ const age=ageAt(m.dob)||0; const agi=agiOf(m); if(age>=16 && agi<=580000){ fRows.push({m,age,agi,kind:(age>=70?(m.cohabit?'同居老親等':'老人'):(age>=19&&age<=22?'特定扶養':'一般')), it:fuyou_IT(age,m.cohabit), rt:fuyou_RT(age,m.cohabit)}); }
-                       if(age>=19&&age<=22 && agi>580000 && agi<=1230000){ tRows.push({m,age,agi,it:tokutei_IT(agi), rt:tokutei_RT(agi)}); } });
-  const c3=document.createElement('div'); c3.className='card'; c3.innerHTML = `<h3>扶養控除合計：<b class="mono">${yen(fRows.reduce((a,r)=>a+r.it,0))}</b>（所得税）</h3><table class="table"><thead><tr><th>氏名</th><th>年齢</th><th>合計所得</th><th>区分</th><th>控除額(IT/RT)</th></tr></thead><tbody>${fRows.map(r=>`<tr><td>${r.m.name||'-'}</td><td>${r.age}</td><td class="mono">${yen(r.agi)}</td><td>${r.kind}</td><td class="mono">${yen(r.it)} / ${yen(r.rt)}</td></tr>`).join('')||'<tr><td colspan="5">—</td></tr>'}</tbody></table>`;
-  const c4=document.createElement('div'); c4.className='card'; c4.innerHTML = `<h3>特定親族特別控除：<b class="mono">${yen(tRows.reduce((a,r)=>a+r.it,0))}</b>（所得税）</h3><table class="table"><thead><tr><th>氏名</th><th>年齢</th><th>合計所得</th><th>控除額(IT/RT)</th></tr></thead><tbody>${tRows.map(r=>`<tr><td>${r.m.name||'-'}</td><td>${r.age}</td><td class="mono">${yen(r.agi)}</td><td class="mono">${yen(r.it)} / ${yen(r.rt)}</td></tr>`).join('')||'<tr><td colspan="4">—</td></tr>'}</tbody></table>`;
-  res.append(c1,c2,c3,c4);
+    const deps = members.filter(m=>m.kind!=='配偶者');
+    deps.forEach(m=>{
+      const age=ageAt(m.dob)||0; const agi=agiOf(m);
+      if(age>=16 && agi<=580000){ const it=fuyou_IT(age, m.cohabit), rt=fuyou_RT(age, m.cohabit); const note=(age>=70? (m.cohabit?'同居老親等':'老人') : (age>=19&&age<=22?'特定扶養':'一般')); push(`扶養控除（${m.name||m.kind}）`, it, rt, note); }
+      if(agi<=580000 && m.disabled!=='none'){ const it=(m.disabled==='tokubetsu'?400000:270000), rt=(m.disabled==='tokubetsu'?300000:260000); push(`障害者控除（${m.name||m.kind}）`, it, rt, '扶養親族'); }
+      if(age>=19 && age<=22 && agi>580000 && agi<=1230000){ const it=tokutei_IT(agi), rt=tokutei_RT(agi); push(`特定親族特別控除（${m.name||m.kind}）`, it, rt, `AGI：${yen(agi)}`); }
+    });
 
-  // 転記シート（開いている場合だけ再構築）
-  if(getComputedStyle($('#sheetPanel')).display!=='none') buildSheets({you, employer, youAGI, youBasicIT, youBasicRT, kubun1, spouse, spAGI, spAge, fRows, tRows});
+    const tbody=$('#tbody'); tbody.innerHTML='';
+    rows.forEach(r=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.name}</td><td class="right mono">${yen(r.it)}</td><td class="right mono">${yen(r.rt)}</td><td>${r.memo||''}</td>`; tbody.appendChild(tr); });
+    $('#sum_itax').textContent = yen(itSum);
+    $('#sum_rtax').textContent = yen(rtSum);
+
+    if(getComputedStyle($('#sheetPanel')).display!=='none') buildSheets({you, employer, youAGI, youBasicIT, youBasicRT, spouse});
+  }catch(e){ console.error('計算エラー', e); }
 }
 
 function buildSheets(ctx){
-  const {you, employer, youAGI, youBasicIT, youBasicRT, kubun1, spouse, spAGI, spAge, fRows, tRows} = ctx;
+  const {you, employer, youAGI, youBasicIT, youBasicRT, spouse} = ctx;
   const sheet=$('#sheet'); sheet.innerHTML='';
   const title=document.createElement('div'); title.className='title'; title.innerHTML=`<h2>令和7年分  基礎控除・配偶者控除等・特定親族特別控除・所得金額調整控除／扶養控除等（異動）申告書（下書き）</h2><div class="subtle">勤務先：${escapeHtml(employer)||'—'}</div>`; sheet.appendChild(title);
 
   const grid=document.createElement('div'); grid.className='grid-2';
 
-  const b1=document.createElement('div'); b1.className='box'; b1.innerHTML=`<h4>◆ 給与所得者の基礎控除申告書</h4><div class="kv"><div>氏名（フリガナ）</div><div><b>${escapeHtml(you.name)||'—'}</b>（${escapeHtml(you.kana)||'—'}）</div><div>住所</div><div>${escapeHtml(you.addr)||'—'}</div><div>生年月日</div><div>${you.dob||'—'}</div><div>合計所得金額の見積額</div><div class="mono">${yen(youAGI)}</div><div>区分Ⅰ（A/B/C）</div><div class="mono">${kubun1}</div><div>基礎控除（所得税/住民税）</div><div class="mono">${yen(youBasicIT)} / ${yen(youBasicRT)}</div></div>`;
+  const b1=document.createElement('div'); b1.className='box'; b1.innerHTML=`<h4>◆ 給与所得者の基礎控除申告書</h4><div class="kv"><div>氏名（フリガナ）</div><div><b>${escapeHtml(you.name)||'—'}</b>（${escapeHtml(you.kana)||'—'}）</div><div>住所</div><div>${escapeHtml(you.addr)||'—'}</div><div>生年月日</div><div>${you.dob||'—'}</div><div>合計所得金額の見積額</div><div class="mono">${yen(youAGI)}</div><div>基礎控除（所得税/住民税）</div><div class="mono">${yen(youBasicIT)} / ${yen(youBasicRT)}</div></div>`;
 
   const b2=document.createElement('div'); b2.className='box';
   let spHtml='<div class="kv"><div>配偶者</div><div>—</div></div>';
-  if(spouse){ spHtml = `<div class="kv"><div>配偶者氏名（フリガナ）</div><div><b>${escapeHtml(spouse.name)||'—'}</b>（${escapeHtml(spouse.kana)||'—'}）</div><div>生年月日</div><div>${spouse.dob||'—'}（年齢：${spAge??'—'}）</div><div>配偶者の合計所得見積額</div><div class="mono">${yen(spAGI)}</div></div>`; }
+  if(spouse){ const spAGI=agiOf(spouse); const spAge=ageAt(spouse.dob)||0; spHtml = `<div class="kv"><div>配偶者氏名（フリガナ）</div><div><b>${escapeHtml(spouse.name)||'—'}</b>（${escapeHtml(spouse.kana)||'—'}）</div><div>生年月日</div><div>${spouse.dob||'—'}（年齢：${spAge}）</div><div>配偶者の合計所得見積額</div><div class="mono">${yen(spAGI)}</div></div>`; }
   b2.innerHTML = `<h4>◆ 給与所得者の配偶者控除等申告書</h4>${spHtml}`;
 
-  const b3=document.createElement('div'); b3.className='box'; b3.innerHTML=`<h4>◆ 給与所得者の特定親族特別控除申告書</h4><table class="table"><thead><tr><th>特定親族の氏名</th><th>年齢</th><th>合計所得</th><th>控除額（IT/RT）</th></tr></thead><tbody>${tRows.map(r=>`<tr><td>${escapeHtml(r.m.name)||'-'}</td><td>${r.age}</td><td class="mono">${yen(r.agi)}</td><td class="mono">${yen(r.it)} / ${yen(r.rt)}</td></tr>`).join('')||'<tr><td colspan="4">該当なし</td></tr>'}</tbody></table>`;
+  const b3=document.createElement('div'); b3.className='box'; b3.innerHTML=`<h4>◆ 給与所得者の特定親族特別控除申告書</h4><div class="subtle">該当者のみ別表で金額帯を確認</div>`;
 
-  const b5=document.createElement('div'); b5.className='box'; b5.innerHTML=`<h4>◆ 扶養控除等（異動）申告書（控除対象扶養親族）</h4><table class="table"><thead><tr><th>氏名</th><th>生年月日</th><th>続柄</th><th>区分</th><th>合計所得</th></tr></thead><tbody>${fRows.map(r=>`<tr><td>${escapeHtml(r.m.name)||'-'}</td><td>${r.m.dob||'-'}</td><td>${r.m.kind}</td><td>${escapeHtml(r.kind)}</td><td class="mono">${yen(r.agi)}</td></tr>`).join('')||'<tr><td colspan="5">該当なし</td></tr>'}</tbody></table>`;
+  const b5=document.createElement('div'); b5.className='box'; b5.innerHTML=`<h4>◆ 扶養控除等（異動）申告書（控除対象扶養親族）</h4><div class="subtle">控除対象扶養親族の氏名・生年月日・区分・合計所得を転記</div>`;
 
   grid.append(b1,b2,b3,b5); sheet.appendChild(grid);
 }
@@ -336,36 +370,36 @@ function exportPDF(){
   th,td{border:1px solid #000;padding:4px 6px;text-align:left}</style>
   </head><body>${s.outerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`;
   w.document.open(); w.document.write(html); w.document.close();
-} const w=window.open('', '_blank'); w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>転記シートPDF</title><style>@page{size:A4 landscape;margin:10mm}body{font:12px/1.4 system-ui}.sheet{border:none}.box{border:1px solid #000;padding:8px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #000;padding:4px 6px;text-align:left}</style></head><body>${s.outerHTML}<script>window.onload=()=>window.print()</script></body></html>`); w.document.close(); }
+}
 function resetAll(){ if(!confirm('入力内容をすべて初期化します。よろしいですか？')) return; $('#employer').value=''; $('#youName').value=''; $('#youKana').value=''; $('#youAddr').value=''; $('#youDOB').value=''; $('#youSalary').value=''; $('#youOther').value='0'; $('#youDis').value='none'; $('#hasSpouse').value='no'; members=[]; renderMembers(); attachComma(); recalc(); }
 function escapeHtml(s){ if(!s&&s!==0) return ''; return String(s).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
 
-// ====== バージョンカウンタ（コード更新ごとに自動加算） ======
+// ====== バージョンカウンタ（安全版） ======
 async function updateCreditVersion(){
   try{
-    const el = document.getElementById('creditText');
-    if(!el) return;
+    const el = document.getElementById('creditText'); if(!el) return;
     const scriptEl = document.getElementById('app-script');
-    const src = scriptEl ? scriptEl.textContent : document.documentElement.outerHTML; // フォールバック
-    const enc = new TextEncoder();
-    const hashBuf = await crypto.subtle.digest('SHA-256', enc.encode(src));
-    const hex = Array.from(new Uint8Array(hashBuf)).slice(0,8).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const content = scriptEl ? scriptEl.textContent : document.documentElement.outerHTML;
+    let hex = '';
+    if(window.crypto && crypto.subtle){
+      const enc = new TextEncoder();
+      const hashBuf = await crypto.subtle.digest('SHA-256', enc.encode(content));
+      hex = Array.from(new Uint8Array(hashBuf)).slice(0,8).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }else{
+      // Fallback簡易ハッシュ
+      let h=0; for(let i=0;i<content.length;i++){ h=(h*31 + content.charCodeAt(i))>>>0; } hex = ('00000000'+h.toString(16)).slice(-8);
+    }
     const KEY_HASH='jk_r6_hash', KEY_REV='jk_r6_rev';
     const oldHash = localStorage.getItem(KEY_HASH);
     let rev = Number(localStorage.getItem(KEY_REV)||'0');
-    if(oldHash !== hex){
-      rev = rev + 1;
-      localStorage.setItem(KEY_HASH, hex);
-      localStorage.setItem(KEY_REV, String(rev));
-    }
-    const d=new Date(); const pad=n=>String(n).padStart(2,'0');
-    const ts=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    if(oldHash !== hex){ rev = rev + 1; localStorage.setItem(KEY_HASH, hex); localStorage.setItem(KEY_REV, String(rev)); }
     el.textContent = `Copyright (c) 2025 税理士法人松本会計事務所 All Rights Reserved. / r6 rev.${rev}`;
-  }catch(e){ /* 失敗時は既定文言のまま */ }
+  }catch{ /* 失敗時は既定文言のまま */ }
 }
 
 // 初期化
 attachComma();
+renderMembers();
 recalc();
 updateCreditVersion();
 </script>
