@@ -229,13 +229,29 @@ function renderMembers(){
 
 // ====== 計算ユーティリティ ======
 function kyuyoShotokuKojo(s){
-  s = Number(s||0);
-  if(s<=0) return 0;
-  if(s<=1625000) return 650000;
-  if(s<=1800000) return Math.floor(s*0.4 - 100000);
-  if(s<=3600000) return Math.floor(s*0.3 + 80000);
-  if(s<=6600000) return Math.floor(s*0.2 + 440000);
-  if(s<=8500000) return Math.floor(s*0.1 + 1100000);
+  // 令和7年分 国税庁「給与所得の計算欄」に完全準拠
+  // https://www.nta.go.jp/publication/pamph/gensen/nencho2025/pdf/306.pdf の「給与所得の計算欄」
+  let A = Math.floor(Number(s||0));
+  if(A<=0) return 0;
+  if(A<=650999) return A;                    // 給与所得金額=0円
+  if(A<=1899999) return 650000;              // A - 650,000
+  if(A<=3599999){                            // B= A/4 （千円未満切捨て） → 給与所得=B*2.8-80,000
+    const q = Math.floor(A/4);
+    const B = q - (q%1000);                  // 千円未満切捨て
+    const income = Math.floor(B*2.8 - 80000);
+    return Math.max(0, A - income);
+  }
+  if(A<=6599999){                            // B= A/4 （千円未満切捨て） → 給与所得=B*3.2-440,000
+    const q = Math.floor(A/4);
+    const B = q - (q%1000);
+    const income = Math.floor(B*3.2 - 440000);
+    return Math.max(0, A - income);
+  }
+  if(A<=8499999){                             // 給与所得=A*0.9-1,100,000
+    const income = Math.floor(A*0.9 - 1100000);
+    return Math.max(0, A - income);
+  }
+  // 8,500,000円以上：A-1,950,000（所得金額調整控除は別途）
   return 1950000;
 }
 function salaryToIncome(s){ return Math.max(0, Number(s||0) - kyuyoShotokuKojo(s)); }
